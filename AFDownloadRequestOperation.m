@@ -47,7 +47,9 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
 @property (nonatomic, copy) AFURLConnectionProgressiveOperationProgressBlock progressiveDownloadProgress;
 @end
 
-@implementation AFDownloadRequestOperation
+@implementation AFDownloadRequestOperation {
+    BOOL _useTemporaryFile;
+}
 
 #pragma mark - NSObject
 
@@ -61,10 +63,16 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
 }
 
 - (id)initWithRequest:(NSURLRequest *)urlRequest targetPath:(NSString *)targetPath shouldResume:(BOOL)shouldResume {
+    return [self initWithRequest:urlRequest targetPath:targetPath shouldResume:shouldResume useTemporaryFile:YES];
+}
+
+- (id)initWithRequest:(NSURLRequest *)urlRequest targetPath:(NSString *)targetPath shouldResume:(BOOL)shouldResume useTemporaryFile:(BOOL)useTemporaryFile
+{
     if ((self = [super initWithRequest:urlRequest])) {
         NSParameterAssert(targetPath != nil && urlRequest != nil);
         _shouldResume = shouldResume;
-
+        _useTemporaryFile = useTemporaryFile;
+        
         // Ee assume that at least the directory has to exist on the targetPath
         BOOL isDirectory;
         if(![[NSFileManager defaultManager] fileExistsAtPath:targetPath isDirectory:&isDirectory]) {
@@ -77,10 +85,10 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
         }else {
             _targetPath = targetPath;
         }
-
+        
         // Download is saved into a temorary file and renamed upon completion.
         NSString *tempPath = [self tempPath];
-
+        
         // Do we need to resume the file?
         BOOL isResuming = [self updateByteStartRangeForRequest];
         
@@ -89,7 +97,7 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
             int fileDescriptor = open([tempPath UTF8String], O_CREAT | O_EXCL | O_RDWR, 0666);
             if (fileDescriptor > 0) close(fileDescriptor);
         }
-
+        
         self.outputStream = [NSOutputStream outputStreamToFileAtPath:tempPath append:isResuming];
         // If the output stream can't be created, instantly destroy the object.
         if (!self.outputStream) return nil;
@@ -98,7 +106,9 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
         [self setCompletionBlockWithSuccess:nil failure:nil];
     }
     return self;
+
 }
+
 
 // updates the current request to set the correct start-byte-range.
 - (BOOL)updateByteStartRangeForRequest {
@@ -123,6 +133,9 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
 #pragma mark - Public
 
 - (BOOL)deleteTempFileWithError:(NSError *__autoreleasing*)error {
+    if (!_useTemporaryFile)
+        return YES;
+    
     NSFileManager *fileManager = [NSFileManager new];
     BOOL success = YES;
     @synchronized(self) {
@@ -135,6 +148,9 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
 }
 
 - (NSString *)tempPath {
+    if (!_useTemporaryFile)
+        return _targetPath;
+    
     NSString *tempPath = nil;
     if (self.targetPath) {
         NSString *md5URLString = [[self class] md5StringForString:self.targetPath];
@@ -215,7 +231,7 @@ typedef void (^AFURLConnectionProgressiveOperationProgressBlock)(AFDownloadReque
             }
 
         // loss of network connections = error set, but not cancel
-        }else if(!self.error) {
+        }else if(!self.error && _useTemporaryFile) {
             // move file to final position and capture error
             @synchronized(self) {
                 NSFileManager *fileManager = [NSFileManager new];

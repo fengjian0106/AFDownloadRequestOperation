@@ -87,6 +87,8 @@
  */
 - (id)initWithRequest:(NSURLRequest *)urlRequest targetPath:(NSString *)targetPath shouldResume:(BOOL)shouldResume;
 
+- (id)initWithRequest:(NSURLRequest *)urlRequest targetPath:(NSString *)targetPath shouldResume:(BOOL)shouldResume useTemporaryFile:(BOOL)useTemporaryFile;
+
 /** 
  Deletes the temporary file.
  
